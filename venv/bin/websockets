@@ -1,0 +1,8 @@
+#!/bin/sh
+'''exec' "/Users/joon/Library/CloudStorage/GoogleDrive-kimjunhee2483@gmail.com/다른 컴퓨터/내 노트북/#joonspace/#WorkSpace/Capston-Design/paper-analyzer/venv/bin/python3" "$0" "$@"
+' '''
+import sys
+from websockets.cli import main
+if __name__ == '__main__':
+    sys.argv[0] = sys.argv[0].removesuffix('.exe')
+    sys.exit(main())

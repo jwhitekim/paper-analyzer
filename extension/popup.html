@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <title>Paper Analyzer</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #f4f6f9;
+      --dark: #1a1a2e;
+      --accent: #4a6cf7;
+      --muted: #8a95a8;
+      --border: #e8ecf0;
+      --text: #222;
+    }
+
+    body {
+      width: 480px;
+      min-height: 200px;
+      font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
+      font-size: 13px;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+    }
+
+    /* Header */
+    .header {
+      background: var(--dark);
+      color: #fff;
+      padding: 12px 16px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .header h1 { font-size: 1rem; font-weight: 700; }
+    .header .badge {
+      font-size: .7rem; font-weight: 600;
+      padding: 2px 8px; border-radius: 20px;
+      background: #1e7e34; color: #fff;
+    }
+    .header .open-web {
+      margin-left: auto;
+      font-size: .75rem;
+      color: #a5b4fc;
+      cursor: pointer;
+      text-decoration: underline;
+    }
+
+    /* Drop zone */
+    #dropzone {
+      margin: 16px;
+      border: 2px dashed #c5cede;
+      border-radius: 10px;
+      padding: 28px 20px;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color .2s, background .2s;
+      background: #fff;
+    }
+    #dropzone.over {
+      border-color: var(--accent);
+      background: rgba(74,108,247,.05);
+    }
+    #dropzone .icon { font-size: 2rem; margin-bottom: 8px; }
+    #dropzone .hint { color: var(--muted); font-size: .85rem; }
+    #dropzone .hint strong { color: var(--accent); cursor: pointer; }
+
+    #fileInput { display: none; }
+
+    /* Status */
+    #status {
+      margin: 0 16px 12px;
+      font-size: .85rem;
+      color: var(--muted);
+      text-align: center;
+      min-height: 20px;
+    }
+    #status.loading { color: var(--accent); }
+    #status.error   { color: #c0392b; }
+
+    /* Result */
+    #result { display: none; padding: 0 16px 16px; }
+
+    /* Paper title */
+    .paper-title {
+      font-weight: 700;
+      font-size: .95rem;
+      color: var(--dark);
+      line-height: 1.4;
+      margin-bottom: 8px;
+    }
+
+    .meta-row {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-bottom: 10px;
+    }
+    .meta-chip {
+      padding: 2px 8px;
+      background: #eef1ff;
+      border-radius: 4px;
+      font-size: .75rem;
+      color: #374880;
+    }
+
+    /* Keyword tags */
+    .kw-row { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 10px; }
+    .kw-tag {
+      padding: 2px 9px;
+      background: rgba(74,108,247,.1);
+      color: var(--accent);
+      border-radius: 20px;
+      font-size: .76rem;
+      font-weight: 600;
+    }
+
+    /* Relevance banner */
+    .rel-banner {
+      display: flex; align-items: center; gap: 8px;
+      padding: 8px 12px; border-radius: 6px;
+      font-size: .82rem; margin-bottom: 10px;
+    }
+    .rel-banner .label { font-weight: 800; white-space: nowrap; }
+    .rel-high { background: #d4f0dc; color: #1a7a3c; }
+    .rel-low  { background: #fde8e8; color: #c0392b; }
+    .rel-mid  { background: #fef3cd; color: #856404; }
+
+    /* Analysis accordion */
+    .acc-item {
+      border-left: 3px solid transparent;
+      margin-bottom: 2px;
+    }
+    .acc-item.prob { border-left-color: #e74c3c; }
+    .acc-item.meth { border-left-color: var(--accent); }
+    .acc-item.conc { border-left-color: #27ae60; }
+
+    .acc-item summary {
+      display: flex; align-items: baseline; gap: 8px;
+      padding: 10px 0 10px 12px;
+      cursor: pointer; list-style: none;
+      border-top: 1px solid var(--border);
+    }
+    .acc-item summary::-webkit-details-marker { display: none; }
+    .acc-item summary::after {
+      content: '▸'; margin-left: auto; font-size: .7rem;
+      color: var(--muted); flex-shrink: 0;
+    }
+    .acc-item[open] summary::after { content: '▾'; }
+
+    .acc-item .lbl {
+      font-size: .73rem; font-weight: 800;
+      color: #2c3544; white-space: nowrap;
+    }
+    .acc-item .short {
+      font-size: .84rem; color: #4a5568; line-height: 1.4;
+    }
+    .acc-item .detail {
+      padding: 6px 12px 10px;
+      font-size: .84rem; line-height: 1.65;
+      color: #2c3544; background: #fafbfe;
+      border-top: 1px dashed var(--border);
+    }
+
+    /* Journal quality */
+    .quality-row {
+      display: flex; align-items: center; gap: 10px;
+      padding: 8px 12px;
+      background: #fff; border: 1px solid var(--border);
+      border-radius: 8px; margin-bottom: 10px;
+    }
+    .q-badge {
+      width: 36px; height: 36px; border-radius: 6px;
+      display: flex; align-items: center; justify-content: center;
+      font-weight: 800; font-size: .85rem; color: #fff; flex-shrink: 0;
+    }
+    .q-q1 { background: var(--accent); }
+    .q-q2 { background: #6d87f7; }
+    .q-q3 { background: #f39c12; }
+    .q-q4 { background: #6b7280; }
+
+    .q-info .q-title { font-weight: 600; font-size: .82rem; line-height: 1.3; }
+    .q-info .q-sjr  { font-size: .75rem; color: var(--muted); }
+
+    /* Figures */
+    .figures-row {
+      display: flex; gap: 6px; flex-wrap: wrap;
+      margin-bottom: 8px;
+    }
+    .fig-thumb {
+      width: 80px; height: 60px; object-fit: contain;
+      border: 1px solid var(--border); border-radius: 4px;
+      background: #fff; cursor: pointer;
+    }
+
+    /* Section label */
+    .sec-label {
+      font-size: .7rem; font-weight: 700; letter-spacing: 1px;
+      text-transform: uppercase; color: var(--muted);
+      margin: 12px 0 6px;
+    }
+
+    /* Loader spinner */
+    .spinner {
+      display: inline-block;
+      width: 14px; height: 14px;
+      border: 2px solid #dde3ec;
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin .8s linear infinite;
+      vertical-align: middle; margin-left: 6px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+
+  <div class="header">
+    <span style="font-size:1.2rem;">📄</span>
+    <h1>Paper Analyzer</h1>
+    <span class="badge" id="providerBadge">Gemini</span>
+    <span class="open-web" id="openWeb">웹 열기 ↗</span>
+  </div>
+
+  <div id="dropzone">
+    <div class="icon">📥</div>
+    <div class="hint">PDF를 여기에 드래그하거나<br><strong id="browseBtn">파일 선택</strong>을 클릭하세요</div>
+    <input type="file" id="fileInput" accept="application/pdf">
+  </div>
+
+  <div id="status"></div>
+  <div id="result"></div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

@@ -1,0 +1,14 @@
+{
+  "manifest_version": 3,
+  "name": "Paper Analyzer",
+  "version": "1.0.0",
+  "description": "PDF 논문을 드래그하거나 선택해서 즉시 분석",
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Paper Analyzer"
+  },
+  "permissions": [],
+  "host_permissions": [
+    "http://localhost:8000/*"
+  ]
+}
