@@ -1,4 +1,4 @@
-const SERVER = 'http://localhost:8000';
+const SERVER = 'https://simmering-harbor-common.ngrok-free.dev';
 
 const dropzone  = document.getElementById('dropzone');
 const fileInput = document.getElementById('fileInput');
