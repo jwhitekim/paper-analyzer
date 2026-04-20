@@ -23,24 +23,32 @@ def _page_text(doc: fitz.Document, pages: int = 2) -> str:
 
 def extract_title(doc: fitz.Document) -> str:
     page = doc[0]
-    spans = []
+    # Group by line: each line gets (max_font_size, concatenated_text)
+    lines = []
     for block in page.get_text("dict")["blocks"]:
         if block.get("type") != 0:
             continue
         for line in block.get("lines", []):
+            parts = []
+            max_size = 0
             for span in line.get("spans", []):
                 text = span.get("text", "").strip()
                 size = span.get("size", 0)
                 if text and size > 10:
-                    spans.append((size, text))
+                    parts.append(text)
+                    if size > max_size:
+                        max_size = size
+            if parts and max_size > 10:
+                lines.append((max_size, " ".join(parts)))
 
-    if not spans:
+    if not lines:
         return ""
 
-    spans.sort(reverse=True)
-    max_size = spans[0][0]
-    parts = [t for s, t in spans if s >= max_size * 0.88]
-    return " ".join(parts[:6]).strip()
+    lines.sort(reverse=True)
+    max_size = lines[0][0]
+    # Collect consecutive title lines within 88% of the largest font
+    title_lines = [t for s, t in lines if s >= max_size * 0.88]
+    return " ".join(title_lines[:4]).strip()
 
 
 def extract_abstract(doc: fitz.Document) -> str:
