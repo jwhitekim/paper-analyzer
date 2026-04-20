@@ -5,6 +5,17 @@ import fitz  # pymupdf
 _ARXIV_RE = re.compile(r'arXiv\s*[:\.]?\s*([\d]{4}\.\d{4,5}(?:v\d+)?)', re.I)
 _DOI_RE   = re.compile(r'10\.\d{4,}/[^\s&?#"\']+')
 
+# 스펙 우선순위
+_PRIORITY_HIGH  = re.compile(r'\b(?:architecture|overview|framework|pipeline)\b', re.I)
+_PRIORITY_MID   = re.compile(r'\bfig(?:ure)?\.?\s*1\b', re.I)
+_CAPTION_RE     = re.compile(r'\bfig(?:ure)?\.?\s*\d+', re.I)
+
+_NEXT_SECTION = re.compile(
+    r'\n\s*(?:(?:1\s*\.?\s*)?(?:introduction|keywords|index terms|ccs concepts|'
+    r'background|related work|notation|nomenclature))',
+    re.I
+)
+
 
 def _page_text(doc: fitz.Document, pages: int = 2) -> str:
     return "".join(doc[i].get_text() for i in range(min(pages, len(doc))))
@@ -32,12 +43,6 @@ def extract_title(doc: fitz.Document) -> str:
     return " ".join(parts[:6]).strip()
 
 
-_NEXT_SECTION = re.compile(
-    r'\n\s*(?:(?:1\s*\.?\s*)?(?:introduction|keywords|index terms|ccs concepts|'
-    r'background|related work|notation|nomenclature))',
-    re.I
-)
-
 def extract_abstract(doc: fitz.Document) -> str:
     text = _page_text(doc, 3)
 
@@ -49,15 +54,14 @@ def extract_abstract(doc: fitz.Document) -> str:
         m = re.search(r'(?:abstract|ABSTRACT)\s*[—–:\-]+\s*(.*?)(?=' + _NEXT_SECTION.pattern + r'|\Z)',
                       text, re.DOTALL | re.I)
     if not m:
-        # Strategy 3: just grab text after the word Abstract up to 1500 chars
+        # Strategy 3: grab text after "Abstract" up to 1500 chars
         m = re.search(r'(?:abstract|ABSTRACT)[^\w]+([\s\S]{100,1500}?)(?=' + _NEXT_SECTION.pattern + r'|\Z)',
                       text, re.I)
 
     if m:
         abstract = m.group(1).strip()
-        abstract = re.sub(r'-\s*\n', '', abstract)   # de-hyphenate
+        abstract = re.sub(r'-\s*\n', '', abstract)
         abstract = re.sub(r'\s+', ' ', abstract)
-        # sanity: must be at least 80 chars and not another section header
         if len(abstract) >= 80:
             return abstract[:3000]
     return ""
@@ -79,38 +83,54 @@ def extract_ids(doc: fitz.Document) -> dict:
     return {"arxivId": arxiv_id, "doi": doi}
 
 
-_FIG_CAPTION_RE = re.compile(r'\bfig(?:ure)?\.?\s*\d+', re.I)
+def _caption_score(caption_text: str, img_area: float) -> int:
+    """
+    우선순위:
+      300 - Architecture/Overview/Framework/Pipeline 포함 캡션
+      200 - Fig. 1 / Figure 1
+      100 - 기타 Figure 캡션
+        0 - 캡션 없음 (크기만 반영)
+    """
+    if _PRIORITY_HIGH.search(caption_text):
+        return 300
+    if _PRIORITY_MID.search(caption_text):
+        return 200
+    if _CAPTION_RE.search(caption_text):
+        return 100
+    return 0
 
 
-def _find_figure_rects(page: fitz.Page) -> list:
-    """Return bounding boxes of blocks that contain figure captions."""
-    rects = []
-    blocks = page.get_text("dict")["blocks"]
-    page_h = page.rect.height
-    for block in blocks:
+def _collect_page_captions(page: fitz.Page) -> list:
+    """Return list of (rect, text) for blocks containing figure captions."""
+    captions = []
+    for block in page.get_text("dict")["blocks"]:
         if block.get("type") != 0:
             continue
-        for line in block.get("lines", []):
-            line_text = " ".join(s.get("text", "") for s in line.get("spans", []))
-            if _FIG_CAPTION_RE.search(line_text):
-                rects.append(fitz.Rect(block["bbox"]))
-                break
-    return rects
+        block_text = " ".join(
+            s.get("text", "")
+            for line in block.get("lines", [])
+            for s in line.get("spans", [])
+        )
+        if _CAPTION_RE.search(block_text):
+            captions.append((fitz.Rect(block["bbox"]), block_text))
+    return captions
 
 
 def extract_figures(doc: fitz.Document, max_figures: int = 3) -> list:
     candidates = []
+    page_area_ref = None
 
     for page_num in range(min(len(doc), 12)):
         page = doc[page_num]
         page_area = page.rect.width * page.rect.height
-        caption_rects = _find_figure_rects(page)
+        if page_area_ref is None:
+            page_area_ref = page_area
 
-        img_list = page.get_images(full=True)
-        for img in img_list:
+        captions = _collect_page_captions(page)
+
+        for img in page.get_images(full=True):
             xref = img[0]
             try:
-                # get image placement rect on page
                 img_rects = page.get_image_rects(xref)
                 if not img_rects:
                     continue
@@ -122,45 +142,58 @@ def extract_figures(doc: fitz.Document, max_figures: int = 3) -> list:
 
                 w, h = pix.width, pix.height
 
-                # skip tiny or very narrow/tall decorative images
                 if w < 200 or h < 150:
                     pix = None
                     continue
                 aspect = w / h
-                if aspect < 0.4 or aspect > 6:
+                if aspect < 0.3 or aspect > 7:
                     pix = None
                     continue
-
-                # skip images that are too small relative to the page (likely icons)
                 img_area = img_rect.width * img_rect.height
                 if img_area < page_area * 0.03:
                     pix = None
                     continue
 
-                # score: boost if a caption is nearby (within 80pt vertically)
-                score = w * h
-                for cr in caption_rects:
+                # 가장 가까운 캡션 찾기 (80pt 이내)
+                nearest_caption = ""
+                min_gap = float("inf")
+                for cr, ct in captions:
                     gap = min(abs(img_rect.y1 - cr.y0), abs(cr.y1 - img_rect.y0))
-                    if gap < 80:
-                        score *= 10
-                        break
+                    if gap < 80 and gap < min_gap:
+                        min_gap = gap
+                        nearest_caption = ct
+
+                priority = _caption_score(nearest_caption, img_area)
+                # 같은 priority 내에서는 크기 순
+                size_score = w * h
 
                 b64 = base64.b64encode(pix.tobytes("png")).decode()
                 candidates.append({
                     "page": page_num + 1,
                     "width": w,
                     "height": h,
-                    "score": score,
+                    "caption": nearest_caption.strip(),
+                    "priority": priority,
+                    "size_score": size_score,
                     "data": f"data:image/png;base64,{b64}",
                 })
                 pix = None
             except Exception:
                 continue
 
-    candidates.sort(key=lambda x: -x["score"])
-    for c in candidates:
-        del c["score"]
-    return candidates[:max_figures]
+    # 우선순위 → 크기 순 정렬
+    candidates.sort(key=lambda x: (-x["priority"], -x["size_score"]))
+
+    result = []
+    for c in candidates[:max_figures]:
+        result.append({
+            "page": c["page"],
+            "width": c["width"],
+            "height": c["height"],
+            "caption": c["caption"],
+            "data": c["data"],
+        })
+    return result
 
 
 def extract_from_pdf(pdf_bytes: bytes) -> dict:

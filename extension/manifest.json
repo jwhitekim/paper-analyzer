@@ -10,8 +10,8 @@
   "commands": {
     "_execute_action": {
       "suggested_key": {
-        "default": "Alt+Shift+P",
-        "mac": "Alt+Shift+P"
+        "default": "Alt+P",
+        "mac": "Alt+P"
       },
       "description": "Paper Analyzer 열기"
     }

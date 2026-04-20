@@ -13,7 +13,8 @@ from core.semantic_scholar import (
     parse_url, fetch_paper_by_url,
     fetch_paper_by_id, search_papers_by_title, enrich_authors,
 )
-from core.analyzer import analyze_paper, current_provider
+from core.analyzer import current_provider
+from core.claude_analyzer import analyze_paper
 from core.journal_quality import lookup_venue
 
 app = FastAPI(title="Paper Analyzer")

@@ -230,12 +230,16 @@ function renderResult(data) {
     parts.push(authorItems);
   }
 
-  // Figures (full-width stacked)
+  // Figures (full-width stacked, with caption)
   if (figures && figures.length) {
     parts.push(`<div class="sec-label">📷 추출 이미지</div>`);
-    const imgs = figures.slice(0, 3)
-      .map(f => `<img class="fig-thumb" src="${f.data}" title="p.${f.page}" onclick="this.requestFullscreen?.()">`)
-      .join('');
+    const imgs = figures.slice(0, 3).map(f => {
+      const cap = f.caption ? `<div class="fig-caption">${esc(f.caption)}</div>` : '';
+      return `<div class="fig-wrap">
+        <img class="fig-thumb" src="${f.data}" title="p.${f.page}" onclick="this.requestFullscreen?.()">
+        ${cap}
+      </div>`;
+    }).join('');
     parts.push(`<div class="figures-row">${imgs}</div>`);
   }
 
