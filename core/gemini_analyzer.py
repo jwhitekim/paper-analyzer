@@ -32,7 +32,7 @@ def _fetch_abstract_via_search(title: str, doi: str = "") -> str:
             tools=[types.Tool(google_search=types.GoogleSearch())]
         ),
     )
-    text = resp.text.strip()
+    text = (resp.text or "").strip()
     # 검색 결과가 너무 짧으면 신뢰하지 않음
     return text if len(text) > 100 else ""
 
@@ -55,4 +55,7 @@ def analyze_paper(abstract: str, title: str = "", doi: str = "") -> dict:
         contents=build_prompt(abstract),
         config=types.GenerateContentConfig(temperature=0.1),
     )
-    return parse_json_response(resp.text)
+    raw = resp.text or ""
+    if not raw.strip():
+        return {**EMPTY_RESULT, "problem": "Gemini 응답이 비어있습니다. 잠시 후 다시 시도하세요."}
+    return parse_json_response(raw)
