@@ -1,9 +1,19 @@
-const SERVER = 'https://simmering-harbor-common.ngrok-free.dev';
+const SERVER = 'http://localhost:8000';
 
 const dropzone  = document.getElementById('dropzone');
 const fileInput = document.getElementById('fileInput');
 const statusEl  = document.getElementById('status');
 const resultEl  = document.getElementById('result');
+const resetBar  = document.getElementById('resetBar');
+
+document.getElementById('resetBtn').addEventListener('click', () => {
+  dropzone.style.display = '';
+  resetBar.style.display = 'none';
+  resultEl.style.display = 'none';
+  resultEl.innerHTML = '';
+  setStatus('');
+  fileInput.value = '';
+});
 
 // Open web UI
 document.getElementById('openWeb').addEventListener('click', () => {
@@ -47,6 +57,8 @@ dropzone.addEventListener('drop', e => {
 });
 
 async function uploadFile(file) {
+  dropzone.style.display = 'none';
+  resetBar.style.display = 'none';
   setStatus('분석 중<span class="spinner"></span>', 'loading');
   resultEl.style.display = 'none';
   resultEl.innerHTML = '';
@@ -58,13 +70,16 @@ async function uploadFile(file) {
     const res = await fetch(`${SERVER}/analyze-pdf`, { method: 'POST', body: fd });
     const data = await res.json();
     if (data.error) {
+      dropzone.style.display = '';
       setStatus('❌ ' + data.error, 'error');
     } else {
       setStatus('');
+      resetBar.style.display = 'block';
       renderResult(data);
     }
   } catch (e) {
-    setStatus('❌ 서버 연결 실패 — localhost:8000이 실행 중인지 확인하세요.', 'error');
+    dropzone.style.display = '';
+    setStatus('❌ 서버 연결 실패 — 서버가 실행 중인지 확인하세요.', 'error');
   }
 }
 
@@ -83,7 +98,7 @@ function esc(str) {
 }
 
 function renderResult(data) {
-  const { basic, analysis, quality, figures } = data;
+  const { basic, analysis, quality, figures, authors } = data;
 
   const parts = [];
 
@@ -138,29 +153,60 @@ function renderResult(data) {
 
     // Problem / Method / Conclusion
     const items = [
-      { cls: 'prob', label: '문제',  short: analysis.problem_short  || analysis.problem,  detail: analysis.problem },
-      { cls: 'meth', label: '방법',  short: analysis.method_short   || analysis.method,   detail: analysis.method },
-      { cls: 'conc', label: '결론',  short: analysis.conclusion_short || analysis.conclusion, detail: analysis.conclusion },
+      { cls: 'prob', label: '문제',  text: analysis.problem },
+      { cls: 'meth', label: '방법',  text: analysis.method },
+      { cls: 'conc', label: '결론',  text: analysis.conclusion },
     ];
     for (const item of items) {
       parts.push(`
-        <details class="acc-item ${item.cls}">
-          <summary>
+        <div class="acc-item ${item.cls}">
+          <div class="acc-header">
             <span class="lbl">${item.label}</span>
-            <span class="short">${esc(item.short)}</span>
-          </summary>
-          <div class="detail">${esc(item.detail)}</div>
-        </details>`);
+          </div>
+          <div class="detail">${esc(item.text)}</div>
+        </div>`);
     }
   }
 
-  // Figures (first 3 thumbnails)
+  // Authors
+  if (authors && authors.length) {
+    parts.push(`<div class="sec-label">👤 저자</div>`);
+    const currentTitle = (basic.title || '').toLowerCase();
+    const authorItems = authors.map(a => {
+      const metaParts = [];
+      if (a.hIndex != null)        metaParts.push(`h-index ${a.hIndex}`);
+      if (a.citationCount != null) metaParts.push(`인용 ${a.citationCount.toLocaleString()}회`);
+      const metaLine = metaParts.length
+        ? `<div class="author-meta">${metaParts.join(' · ')}</div>`
+        : '';
+      const s2Link = a.authorId
+        ? `<a class="author-link" href="https://www.semanticscholar.org/author/${a.authorId}" target="_blank">프로필 ↗</a>`
+        : '';
+      const paperItems = (a.topPapers || []).map(p => {
+        const isCurrent = p.title && p.title.toLowerCase() === currentTitle;
+        const titleHtml = isCurrent
+          ? `<strong style="color:#4a6cf7;">${esc(p.title)} ★</strong>`
+          : esc(p.title);
+        return `<li>${titleHtml} <span class="cite">· 인용 ${p.citationCount ?? '?'}회</span></li>`;
+      }).join('');
+      const papersSection = paperItems
+        ? `<ul class="top-papers">${paperItems}</ul>`
+        : '';
+      return `<div class="author-item">
+        <div class="author-head"><span class="author-name">${esc(a.name)}</span>${s2Link}</div>
+        ${metaLine}${papersSection}
+      </div>`;
+    }).join('');
+    parts.push(authorItems);
+  }
+
+  // Figures (full-width stacked)
   if (figures && figures.length) {
     parts.push(`<div class="sec-label">📷 추출 이미지</div>`);
-    const thumbs = figures.slice(0, 3)
+    const imgs = figures.slice(0, 3)
       .map(f => `<img class="fig-thumb" src="${f.data}" title="p.${f.page}" onclick="this.requestFullscreen?.()">`)
       .join('');
-    parts.push(`<div class="figures-row">${thumbs}</div>`);
+    parts.push(`<div class="figures-row">${imgs}</div>`);
   }
 
   resultEl.innerHTML = parts.join('');

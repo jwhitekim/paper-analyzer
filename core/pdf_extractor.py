@@ -32,18 +32,34 @@ def extract_title(doc: fitz.Document) -> str:
     return " ".join(parts[:6]).strip()
 
 
+_NEXT_SECTION = re.compile(
+    r'\n\s*(?:(?:1\s*\.?\s*)?(?:introduction|keywords|index terms|ccs concepts|'
+    r'background|related work|notation|nomenclature))',
+    re.I
+)
+
 def extract_abstract(doc: fitz.Document) -> str:
     text = _page_text(doc, 3)
-    m = re.search(
-        r'(?:abstract|ABSTRACT)[^\w]+(.*?)(?:\n\s*(?:1\s*\.?\s*)?'
-        r'(?:introduction|INTRODUCTION|keywords|Keywords|Index Terms|CCS Concepts))',
-        text, re.DOTALL | re.I
-    )
+
+    # Strategy 1: "Abstract" header → next section
+    m = re.search(r'(?:^|\n)\s*(?:abstract|ABSTRACT)\s*\n(.*?)(?=' + _NEXT_SECTION.pattern + r'|\Z)',
+                  text, re.DOTALL | re.I)
+    if not m:
+        # Strategy 2: inline "Abstract—" or "Abstract:" style
+        m = re.search(r'(?:abstract|ABSTRACT)\s*[—–:\-]+\s*(.*?)(?=' + _NEXT_SECTION.pattern + r'|\Z)',
+                      text, re.DOTALL | re.I)
+    if not m:
+        # Strategy 3: just grab text after the word Abstract up to 1500 chars
+        m = re.search(r'(?:abstract|ABSTRACT)[^\w]+([\s\S]{100,1500}?)(?=' + _NEXT_SECTION.pattern + r'|\Z)',
+                      text, re.I)
+
     if m:
         abstract = m.group(1).strip()
-        abstract = re.sub(r'-\s*\n', '', abstract)
+        abstract = re.sub(r'-\s*\n', '', abstract)   # de-hyphenate
         abstract = re.sub(r'\s+', ' ', abstract)
-        return abstract
+        # sanity: must be at least 80 chars and not another section header
+        if len(abstract) >= 80:
+            return abstract[:3000]
     return ""
 
 
