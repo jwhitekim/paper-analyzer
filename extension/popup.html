@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+  <meta charset="UTF-8">
+  <title>Paper Analyzer</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    :root {
+      --bg: #f4f6f9;
+      --dark: #1a1a2e;
+      --accent: #4a6cf7;
+      --muted: #8a95a8;
+      --border: #e8ecf0;
+      --text: #222;
+    }
+
+    body {
+      width: 680px;
+      min-height: 200px;
+      font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
+      font-size: 15px;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.7;
+    }
+
+    /* Header */
+    .header {
+      background: var(--dark);
+      color: #fff;
+      padding: 12px 16px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .header h1 {
+      font-size: 1rem;
+      font-weight: 700;
+    }
+
+    .header .open-web {
+      margin-left: auto;
+      font-size: .75rem;
+      color: #a5b4fc;
+      cursor: pointer;
+      text-decoration: underline;
+    }
+
+    /* Reset bar */
+    #resetBar {
+      display: none;
+      margin: 12px 20px 0;
+    }
+
+    #resetBar button {
+      font-size: .82rem;
+      color: var(--accent);
+      background: none;
+      border: 1px solid var(--accent);
+      border-radius: 6px;
+      padding: 5px 14px;
+      cursor: pointer;
+      font-weight: 600;
+    }
+
+    #resetBar button:hover {
+      background: rgba(74, 108, 247, .08);
+    }
+
+    /* Drop zone */
+    #dropzone {
+      margin: 16px;
+      border: 2px dashed #c5cede;
+      border-radius: 10px;
+      padding: 28px 20px;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color .2s, background .2s;
+      background: #fff;
+    }
+
+    #dropzone.over {
+      border-color: var(--accent);
+      background: rgba(74, 108, 247, .05);
+    }
+
+    #dropzone .icon {
+      font-size: 2rem;
+      margin-bottom: 8px;
+    }
+
+    #dropzone .hint {
+      color: var(--muted);
+      font-size: .85rem;
+    }
+
+    #dropzone .hint strong {
+      color: var(--accent);
+      cursor: pointer;
+    }
+
+    #fileInput {
+      display: none;
+    }
+
+    /* Status */
+    #status {
+      margin: 0 16px 12px;
+      font-size: .85rem;
+      color: var(--muted);
+      text-align: center;
+      min-height: 20px;
+    }
+
+    #status.loading {
+      color: var(--accent);
+      padding: 36px 0 28px;
+      font-size: 1rem;
+      font-weight: 600;
+      letter-spacing: .02em;
+    }
+
+    #status.error {
+      color: #c0392b;
+    }
+
+    /* Result */
+    #result {
+      display: none;
+      padding: 0 20px 24px;
+    }
+
+    /* Paper title */
+    .paper-title {
+      font-weight: 700;
+      font-size: 1.05rem;
+      color: var(--dark);
+      line-height: 1.5;
+      margin-bottom: 10px;
+    }
+
+    .meta-row {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-bottom: 12px;
+    }
+
+    .meta-chip {
+      padding: 3px 10px;
+      background: #eef1ff;
+      border-radius: 4px;
+      font-size: .82rem;
+      color: #374880;
+    }
+
+    /* Keyword tags */
+    .kw-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-bottom: 14px;
+    }
+
+    .kw-tag {
+      padding: 3px 11px;
+      background: rgba(74, 108, 247, .1);
+      color: var(--accent);
+      border-radius: 20px;
+      font-size: .82rem;
+      font-weight: 600;
+    }
+
+    /* Relevance banner */
+    .rel-banner {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 14px;
+      border-radius: 8px;
+      font-size: .88rem;
+      margin-bottom: 14px;
+    }
+
+    .rel-banner .label {
+      font-weight: 800;
+      white-space: nowrap;
+    }
+
+    .rel-high {
+      background: #d4f0dc;
+      color: #1a7a3c;
+    }
+
+    .rel-low {
+      background: #fde8e8;
+      color: #c0392b;
+    }
+
+    .rel-mid {
+      background: #fef3cd;
+      color: #856404;
+    }
+
+    /* Analysis items */
+    .acc-item {
+      border-left: 3px solid transparent;
+      margin-bottom: 2px;
+    }
+
+    .acc-item.prob {
+      border-left-color: #e74c3c;
+    }
+
+    .acc-item.meth {
+      border-left-color: var(--accent);
+    }
+
+    .acc-item.conc {
+      border-left-color: #27ae60;
+    }
+
+    .acc-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 11px 0 6px 14px;
+      border-top: 1px solid var(--border);
+    }
+
+    .acc-item .lbl {
+      font-size: .78rem;
+      font-weight: 800;
+      color: #2c3544;
+      white-space: nowrap;
+    }
+
+    .acc-item .detail {
+      padding: 0 14px 14px 14px;
+      font-size: .9rem;
+      line-height: 1.75;
+      color: #2c3544;
+    }
+
+    /* Journal quality */
+    .quality-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 14px;
+      background: #fff;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      margin-bottom: 14px;
+    }
+
+    .q-badge {
+      width: 42px;
+      height: 42px;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 800;
+      font-size: .95rem;
+      color: #fff;
+      flex-shrink: 0;
+    }
+
+    .q-q1 {
+      background: var(--accent);
+    }
+
+    .q-q2 {
+      background: #6d87f7;
+    }
+
+    .q-q3 {
+      background: #f39c12;
+    }
+
+    .q-q4 {
+      background: #6b7280;
+    }
+
+    .q-info .q-title {
+      font-weight: 600;
+      font-size: .88rem;
+      line-height: 1.4;
+    }
+
+    .q-info .q-sjr {
+      font-size: .8rem;
+      color: var(--muted);
+      margin-top: 2px;
+    }
+
+    /* Figures */
+    .figures-row {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+
+    .fig-thumb {
+      width: 100%;
+      max-height: 260px;
+      object-fit: contain;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: #fff;
+      cursor: zoom-in;
+      display: block;
+    }
+
+    /* Authors */
+    .author-item {
+      padding: 12px 0;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .author-item:last-child {
+      border-bottom: none;
+    }
+
+    .author-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: 8px;
+    }
+
+    .author-name {
+      font-weight: 700;
+      font-size: .95rem;
+      color: var(--dark);
+    }
+
+    .author-link {
+      font-size: .8rem;
+      color: var(--accent);
+      flex-shrink: 0;
+    }
+
+    .author-meta {
+      font-size: .8rem;
+      color: var(--muted);
+      margin: 4px 0 6px;
+    }
+
+    .top-papers {
+      list-style: none;
+      margin-top: 8px;
+      padding-top: 8px;
+      border-top: 1px dashed var(--border);
+    }
+
+    .top-papers li {
+      font-size: .84rem;
+      color: #333;
+      padding: 6px 0;
+      border-bottom: 1px dashed #f0f2f5;
+      line-height: 1.5;
+    }
+
+    .top-papers li:last-child {
+      border-bottom: none;
+    }
+
+    .top-papers .cite {
+      color: var(--muted);
+      font-size: .78rem;
+    }
+
+    /* Section label */
+    .sec-label {
+      font-size: .72rem;
+      font-weight: 700;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin: 18px 0 8px;
+    }
+
+    /* Loader spinner */
+    .spinner {
+      display: inline-block;
+      width: 14px;
+      height: 14px;
+      border: 2px solid #dde3ec;
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin .8s linear infinite;
+      vertical-align: middle;
+      margin-left: 6px;
+    }
+
+    @keyframes spin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
+  </style>
+</head>
+
+<body>
+
+  <div class="header">
+    <span style="font-size:1.2rem;">📄</span>
+    <h1>Paper Analyzer</h1>
+    <span class="open-web" id="openWeb">웹 열기 ↗</span>
+  </div>
+
+  <div id="dropzone">
+    <div class="icon">📥</div>
+    <div class="hint">PDF를 여기에 드래그하거나<br><strong id="browseBtn">파일 선택</strong>을 클릭하세요</div>
+    <input type="file" id="fileInput" accept="application/pdf">
+  </div>
+
+  <div id="resetBar"><button id="resetBtn">↩ 다른 논문 분석</button></div>
+  <div id="status"></div>
+  <div id="result"></div>
+
+  <script src="popup.js"></script>
+</body>
+
+</html>
